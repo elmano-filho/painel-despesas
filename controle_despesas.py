@@ -11,7 +11,7 @@ MESES_PT = {
 
 # Configurações de layout da página
 st.set_page_config(page_title="Gestão Financeira Familiar", layout="wide")
-st.title("💰 Painel de Controlo: Receitas vs Despesas")
+st.title("💰 Painel de Controle")
 
 # Identificadores da folha de cálculo do Google (conforme o link fornecido)
 SHEET_ID = "1vUqxY2JKJVDiie7Nmq6bUktYYpd_TKjUQn6ZHav0AsY"
