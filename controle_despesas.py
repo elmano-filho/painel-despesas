@@ -13,9 +13,9 @@ MESES_PT = {
 st.set_page_config(page_title="Gestão Financeira Familiar", layout="wide")
 st.title("💰 Painel de Controle")
 
-# Identificadores da folha de cálculo do Google (conforme o link fornecido)
-SHEET_ID = "1vUqxY2JKJVDiie7Nmq6bUktYYpd_TKjUQn6ZHav0AsY"
-GID = "1458453182"
+# O código vai procurar dentro do cofre do Streamlit
+SHEET_ID = st.secrets["ID_PLANILHA"]
+GID = st.secrets["GID_PLANILHA"]
 
 @st.cache_data(ttl=60) # Atualização automática a cada 60 segundos
 def carregar_dados():
