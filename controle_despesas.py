@@ -86,4 +86,94 @@ if not st.session_state.logado:
     senha_digitada = st.text_input("Introduza a palavra-passe:", type="password")
     if st.button("Entrar"):
         if senha_digitada in st.secrets["senhas"]:
-            st.session_state.log
+            st.session_state.logado = True
+            st.session_state.usuario = st.secrets["senhas"][senha_digitada]
+            st.rerun()
+        else:
+            st.error("Palavra-passe incorreta.")
+
+else:
+    usuario_id = st.session_state.usuario
+    gid_aba = st.secrets["abas"][usuario_id]
+
+    # --- NOVO: TELA DE NOVIDADES (ANTES DO DASHBOARD) ---
+    if not st.session_state.viu_novidades:
+        st.title(f"🔔 Olá, {usuario_id.replace('_', ' ')}!")
+        st.subheader("Novidades desde a sua última consulta")
+        
+        with st.spinner("A verificar novos lançamentos..."):
+            # 1. Lê a data e força a remoção de qualquer fuso horário para evitar conflitos
+            data_ultimo_acesso = gerir_timestamp_acesso(gid_aba, modo="ler").replace(tzinfo=None)
+            df_total = carregar_dados(gid_aba)
+            
+            if df_total is not None and not df_total.empty:
+                # 2. Força a coluna Data a não ter fuso horário antes da comparação
+                df_total['Data'] = pd.to_datetime(df_total['Data']).dt.tz_localize(None)
+                
+                # 3. Filtro rigoroso: apenas o que é MAIOR (mais recente) que a última visita
+                novos = df_total[df_total['Data'] > data_ultimo_acesso].copy()
+            else:
+                novos = pd.DataFrame()
+        
+        # --- TEXTO DE DIAGNÓSTICO (Para confirmar o que está a ser lido) ---
+        st.caption(f"*(A sua última consulta registada foi em: {data_ultimo_acesso.strftime('%d/%m/%Y %H:%M:%S')})*")
+        
+        if not novos.empty:
+            st.write(f"Foram detetados **{len(novos)}** novos registos:")
+            novos['Data'] = novos['Data'].dt.strftime('%d/%m/%Y')
+            st.dataframe(novos[['Data', 'Tipo', 'Categoria', 'Descrição', 'Valor (R$)']], use_container_width=True, hide_index=True)
+        else:
+            st.info("Não existem novos lançamentos desde a última vez que consultou o painel.")
+
+        if st.button("Ir para o Painel Principal"):
+            gerir_timestamp_acesso(gid_aba, modo="gravar") # Atualiza o Z1 na planilha
+            st.session_state.viu_novidades = True
+            st.rerun()
+
+    # --- PAINEL PRINCIPAL (DASHBOARD) ---
+    else:
+        st.sidebar.title(f"👤 {usuario_id.replace('_', ' ')}")
+        if st.sidebar.button("Terminar Sessão"):
+            st.session_state.logado = False
+            st.session_state.viu_novidades = False
+            st.rerun()
+
+        st.title("💰 Painel de Controle")
+        df = carregar_dados(gid_aba)
+
+        if df is not None and not df.empty:
+            st.sidebar.header("Seleção do Período")
+            anos_disponiveis = sorted([int(a) for a in df['Data'].dt.year.unique()])
+            ano_selecionado = st.sidebar.selectbox("Ano", anos_disponiveis, index=len(anos_disponiveis)-1)
+            
+            meses_disponiveis = sorted([int(m) for m in df[df['Data'].dt.year == ano_selecionado]['Data'].dt.month.unique()])
+            mes_selecionado = st.sidebar.selectbox("Mês", meses_disponiveis, format_func=lambda x: MESES_PT.get(x, str(x)))
+
+            dados_filtrados = df[(df['Data'].dt.month == mes_selecionado) & (df['Data'].dt.year == ano_selecionado)]
+
+            if dados_filtrados.empty:
+                st.warning(f"Sem registos para {MESES_PT.get(mes_selecionado)}.")
+            else:
+                receitas = dados_filtrados[dados_filtrados['Tipo'] == 'Receita']['Valor (R$)'].sum()
+                despesas = dados_filtrados[dados_filtrados['Tipo'] == 'Despesa']['Valor (R$)'].sum()
+                
+                st.subheader(f"Resumo de {MESES_PT.get(mes_selecionado)} de {ano_selecionado}")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Receitas", f"R$ {receitas:,.2f}")
+                c2.metric("Despesas", f"R$ {despesas:,.2f}", delta=f"-{despesas:,.2f}", delta_color="inverse")
+                c3.metric("Saldo", f"R$ {(receitas - despesas):,.2f}")
+
+                st.markdown("---")
+                col_grafico, col_lista = st.columns([1, 1.2])
+
+                with col_grafico:
+                    st.subheader("📊 Fluxo")
+                    fig_bar, ax_bar = plt.subplots(figsize=(5, 4))
+                    ax_bar.bar(['Receitas', 'Despesas'], [receitas, despesas], color=['#2ecc71', '#e74c3c'])
+                    st.pyplot(fig_bar)
+
+                with col_lista:
+                    st.subheader("📋 Movimentações")
+                    exibicao = dados_filtrados.sort_values(by='Data', ascending=False).copy()
+                    exibicao['Data'] = exibicao['Data'].dt.strftime('%d/%m/%Y')
+                    st.dataframe(exibicao[['Data', 'Tipo', 'Categoria', 'Descrição', 'Valor (R$)']], use_container_width=True, hide_index=True)
