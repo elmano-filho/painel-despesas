@@ -111,18 +111,43 @@ else:
 
         if df is not None and not df.empty:
             st.sidebar.header("Seleção do Período")
-            anos_disponiveis = sorted([int(a) for a in df['Data'].dt.year.unique()])
-            ano_selecionado = st.sidebar.selectbox("Ano", anos_disponiveis, index=len(anos_disponiveis)-1)
             
-            meses_disponiveis = sorted([int(m) for m in df[df['Data'].dt.year == ano_selecionado]['Data'].dt.month.unique()])
-            mes_selecionado = st.sidebar.selectbox("Mês", meses_disponiveis, format_func=lambda x: MESES_PT.get(x, str(x)))
+            # --- SELEÇÃO INTELIGENTE DE DATA ---
+            hoje = datetime.now()
+            ano_atual = hoje.year
+            mes_atual = hoje.month
 
+            # Configura o ANO
+            anos_disponiveis = sorted([int(a) for a in df['Data'].dt.year.unique()])
+            try:
+                index_ano = anos_disponiveis.index(ano_atual)
+            except ValueError:
+                index_ano = len(anos_disponiveis) - 1 # Se não achar o ano atual, pega o último da lista
+
+            ano_selecionado = st.sidebar.selectbox("Ano", anos_disponiveis, index=index_ano)
+            
+            # Configura o MÊS
+            df_ano = df[df['Data'].dt.year == ano_selecionado]
+            meses_disponiveis = sorted([int(m) for m in df_ano['Data'].dt.month.unique()])
+            
+            try:
+                index_mes = meses_disponiveis.index(mes_atual)
+            except ValueError:
+                index_mes = len(meses_disponiveis) - 1 # Se não achar o mês atual, pega o último da lista
+
+            mes_selecionado = st.sidebar.selectbox(
+                "Mês", 
+                meses_disponiveis, 
+                index=index_mes,
+                format_func=lambda x: MESES_PT.get(x, str(x))
+            )
+
+            # --- FILTRAGEM DE DADOS ---
             dados_filtrados = df[(df['Data'].dt.month == mes_selecionado) & (df['Data'].dt.year == ano_selecionado)]
 
             if dados_filtrados.empty:
                 st.warning(f"Sem registos para {MESES_PT.get(mes_selecionado)}.")
             else:
-                # LINHAS CORRIGIDAS: O erro de corte (unterminated string literal) foi consertado aqui.
                 receitas = dados_filtrados[dados_filtrados['Tipo'] == 'Receita']['Valor (R$)'].sum()
                 despesas = dados_filtrados[dados_filtrados['Tipo'] == 'Despesa']['Valor (R$)'].sum()
                 
