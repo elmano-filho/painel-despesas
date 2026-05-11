@@ -179,7 +179,7 @@ else:
             # BALANÇO HISTÓRICO GERAL (Todo o período) - MOVIDO PARA O FINAL
             # =========================================================
             st.markdown("---")
-            with st.expander("🏦 Ver Balanço Histórico Acumulado (Todo o Período)", expanded=False):
+            with st.expander("🏦 Balanço Histórico Acumulado", expanded=False):
                 rec_hist = df[df['Tipo'] == 'Receita']['Valor (R$)'].sum()
                 des_hist = df[df['Tipo'] == 'Despesa']['Valor (R$)'].sum()
                 saldo_hist = rec_hist - des_hist
