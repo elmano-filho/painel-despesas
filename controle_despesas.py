@@ -76,13 +76,8 @@ else:
             df_total = carregar_dados(gid_aba)
             
             if df_total is not None and not df_total.empty:
-                # Remove fusos horários para evitar erros na comparação
                 df_total['Data'] = pd.to_datetime(df_total['Data']).dt.tz_localize(None)
-                
-                # Calcula a data de 7 dias atrás
                 data_limite = datetime.now() - timedelta(days=7)
-                
-                # Filtra apenas o que é igual ou mais recente que a data limite
                 recentes = df_total[df_total['Data'] >= data_limite].copy()
             else:
                 recentes = pd.DataFrame()
@@ -110,30 +105,57 @@ else:
         df = carregar_dados(gid_aba)
 
         if df is not None and not df.empty:
-            st.sidebar.header("Seleção do Período")
             
-            # --- SELEÇÃO INTELIGENTE DE DATA ---
+            # =========================================================
+            # NOVO: BALANÇO HISTÓRICO GERAL (Todo o período)
+            # =========================================================
+            with st.expander("🏦 Ver Balanço Histórico Acumulado (Todo o Período)", expanded=True):
+                rec_hist = df[df['Tipo'] == 'Receita']['Valor (R$)'].sum()
+                des_hist = df[df['Tipo'] == 'Despesa']['Valor (R$)'].sum()
+                saldo_hist = rec_hist - des_hist
+                
+                # Define o texto e a cor baseados no saldo
+                if saldo_hist > 0:
+                    status = "✅ Dinheiro em Caixa (Sobras)"
+                    cor_delta = "normal"
+                elif saldo_hist < 0:
+                    status = "⚠️ Déficit Acumulado (Injetado a mais)"
+                    cor_delta = "inverse"
+                else:
+                    status = "⚖️ Contas perfeitamente equilibradas"
+                    cor_delta = "off"
+
+                st.write(f"**Status Global:** {status}")
+                ch1, ch2, ch3 = st.columns(3)
+                ch1.metric("Total de Receitas (Histórico)", f"R$ {rec_hist:,.2f}")
+                ch2.metric("Total de Despesas (Histórico)", f"R$ {des_hist:,.2f}")
+                ch3.metric("Saldo Acumulado", f"R$ {saldo_hist:,.2f}", delta=f"R$ {saldo_hist:,.2f}", delta_color=cor_delta)
+            
+            st.markdown("---")
+
+            # =========================================================
+            # SELEÇÃO INTELIGENTE DE DATA (Mês atual como padrão)
+            # =========================================================
+            st.sidebar.header("Seleção do Período Mensal")
             hoje = datetime.now()
             ano_atual = hoje.year
             mes_atual = hoje.month
 
-            # Configura o ANO
             anos_disponiveis = sorted([int(a) for a in df['Data'].dt.year.unique()])
             try:
                 index_ano = anos_disponiveis.index(ano_atual)
             except ValueError:
-                index_ano = len(anos_disponiveis) - 1 # Se não achar o ano atual, pega o último da lista
+                index_ano = len(anos_disponiveis) - 1 
 
             ano_selecionado = st.sidebar.selectbox("Ano", anos_disponiveis, index=index_ano)
             
-            # Configura o MÊS
             df_ano = df[df['Data'].dt.year == ano_selecionado]
             meses_disponiveis = sorted([int(m) for m in df_ano['Data'].dt.month.unique()])
             
             try:
                 index_mes = meses_disponiveis.index(mes_atual)
             except ValueError:
-                index_mes = len(meses_disponiveis) - 1 # Se não achar o mês atual, pega o último da lista
+                index_mes = len(meses_disponiveis) - 1 
 
             mes_selecionado = st.sidebar.selectbox(
                 "Mês", 
@@ -142,11 +164,11 @@ else:
                 format_func=lambda x: MESES_PT.get(x, str(x))
             )
 
-            # --- FILTRAGEM DE DADOS ---
+            # --- FILTRAGEM DE DADOS MENSAL ---
             dados_filtrados = df[(df['Data'].dt.month == mes_selecionado) & (df['Data'].dt.year == ano_selecionado)]
 
             if dados_filtrados.empty:
-                st.warning(f"Sem registos para {MESES_PT.get(mes_selecionado)}.")
+                st.warning(f"Sem registos para {MESES_PT.get(mes_selecionado)} de {ano_selecionado}.")
             else:
                 receitas = dados_filtrados[dados_filtrados['Tipo'] == 'Receita']['Valor (R$)'].sum()
                 despesas = dados_filtrados[dados_filtrados['Tipo'] == 'Despesa']['Valor (R$)'].sum()
@@ -155,13 +177,13 @@ else:
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Receitas", f"R$ {receitas:,.2f}")
                 c2.metric("Despesas", f"R$ {despesas:,.2f}", delta=f"-{despesas:,.2f}", delta_color="inverse")
-                c3.metric("Saldo", f"R$ {(receitas - despesas):,.2f}")
+                c3.metric("Saldo do Mês", f"R$ {(receitas - despesas):,.2f}")
 
                 st.markdown("---")
                 col_grafico, col_lista = st.columns([1, 1.2])
 
                 with col_grafico:
-                    st.subheader("📊 Fluxo de Caixa")
+                    st.subheader("📊 Fluxo de Caixa Mensal")
                     fig_bar, ax_bar = plt.subplots(figsize=(5, 4))
                     ax_bar.bar(['Receitas', 'Despesas'], [receitas, despesas], color=['#2ecc71', '#e74c3c'])
                     st.pyplot(fig_bar)
@@ -175,7 +197,7 @@ else:
                         st.pyplot(fig_pie)
 
                 with col_lista:
-                    st.subheader("📋 Movimentações")
+                    st.subheader("📋 Movimentações do Mês")
                     exibicao = dados_filtrados.sort_values(by='Data', ascending=False).copy()
                     exibicao['Data'] = exibicao['Data'].dt.strftime('%d/%m/%Y')
                     st.dataframe(exibicao[['Data', 'Tipo', 'Categoria', 'Descrição', 'Valor (R$)']], use_container_width=True, hide_index=True)
