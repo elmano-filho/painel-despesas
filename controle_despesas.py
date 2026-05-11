@@ -107,33 +107,6 @@ else:
         if df is not None and not df.empty:
             
             # =========================================================
-            # NOVO: BALANÇO HISTÓRICO GERAL (Todo o período)
-            # =========================================================
-            with st.expander("🏦 Ver Balanço Histórico Acumulado (Todo o Período)", expanded=True):
-                rec_hist = df[df['Tipo'] == 'Receita']['Valor (R$)'].sum()
-                des_hist = df[df['Tipo'] == 'Despesa']['Valor (R$)'].sum()
-                saldo_hist = rec_hist - des_hist
-                
-                # Define o texto e a cor baseados no saldo
-                if saldo_hist > 0:
-                    status = "✅ Dinheiro em Caixa (Sobras)"
-                    cor_delta = "normal"
-                elif saldo_hist < 0:
-                    status = "⚠️ Déficit Acumulado (Injetado a mais)"
-                    cor_delta = "inverse"
-                else:
-                    status = "⚖️ Contas perfeitamente equilibradas"
-                    cor_delta = "off"
-
-                st.write(f"**Status Global:** {status}")
-                ch1, ch2, ch3 = st.columns(3)
-                ch1.metric("Total de Receitas (Histórico)", f"R$ {rec_hist:,.2f}")
-                ch2.metric("Total de Despesas (Histórico)", f"R$ {des_hist:,.2f}")
-                ch3.metric("Saldo Acumulado", f"R$ {saldo_hist:,.2f}", delta=f"R$ {saldo_hist:,.2f}", delta_color=cor_delta)
-            
-            st.markdown("---")
-
-            # =========================================================
             # SELEÇÃO INTELIGENTE DE DATA (Mês atual como padrão)
             # =========================================================
             st.sidebar.header("Seleção do Período Mensal")
@@ -201,3 +174,28 @@ else:
                     exibicao = dados_filtrados.sort_values(by='Data', ascending=False).copy()
                     exibicao['Data'] = exibicao['Data'].dt.strftime('%d/%m/%Y')
                     st.dataframe(exibicao[['Data', 'Tipo', 'Categoria', 'Descrição', 'Valor (R$)']], use_container_width=True, hide_index=True)
+
+            # =========================================================
+            # BALANÇO HISTÓRICO GERAL (Todo o período) - MOVIDO PARA O FINAL
+            # =========================================================
+            st.markdown("---")
+            with st.expander("🏦 Ver Balanço Histórico Acumulado (Todo o Período)", expanded=False):
+                rec_hist = df[df['Tipo'] == 'Receita']['Valor (R$)'].sum()
+                des_hist = df[df['Tipo'] == 'Despesa']['Valor (R$)'].sum()
+                saldo_hist = rec_hist - des_hist
+                
+                if saldo_hist > 0:
+                    status = "✅ Dinheiro em Caixa (Sobras)"
+                    cor_delta = "normal"
+                elif saldo_hist < 0:
+                    status = "⚠️ Déficit Acumulado (Injetado a mais)"
+                    cor_delta = "inverse"
+                else:
+                    status = "⚖️ Contas perfeitamente equilibradas"
+                    cor_delta = "off"
+
+                st.write(f"**Status Global:** {status}")
+                ch1, ch2, ch3 = st.columns(3)
+                ch1.metric("Total de Receitas (Histórico)", f"R$ {rec_hist:,.2f}")
+                ch2.metric("Total de Despesas (Histórico)", f"R$ {des_hist:,.2f}")
+                ch3.metric("Saldo Acumulado", f"R$ {saldo_hist:,.2f}", delta=f"R$ {saldo_hist:,.2f}", delta_color=cor_delta)
