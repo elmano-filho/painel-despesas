@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
+import re
 from datetime import datetime, timedelta
 
 # --- CONFIGURAÇÕES INICIAIS ---
@@ -176,10 +177,11 @@ else:
                     st.dataframe(exibicao[['Data', 'Tipo', 'Categoria', 'Descrição', 'Valor (R$)']], use_container_width=True, hide_index=True)
 
             # =========================================================
-            # BALANÇO HISTÓRICO GERAL (Todo o período) - MOVIDO PARA O FINAL
+            # BALANÇO HISTÓRICO GERAL E ACERTO DE CONTAS
             # =========================================================
             st.markdown("---")
-            with st.expander("🏦 Balanço Histórico Acumulado", expanded=False):
+            with st.expander("🏦 Ver Balanço Histórico Acumulado (Todo o Período)", expanded=False):
+                # 1. BALANÇO GERAL DA CONTA
                 rec_hist = df[df['Tipo'] == 'Receita']['Valor (R$)'].sum()
                 des_hist = df[df['Tipo'] == 'Despesa']['Valor (R$)'].sum()
                 saldo_hist = rec_hist - des_hist
@@ -194,8 +196,67 @@ else:
                     status = "⚖️ Contas perfeitamente equilibradas"
                     cor_delta = "off"
 
-                st.write(f"**Status Global:** {status}")
+                st.write(f"**Status Global da Conta:** {status}")
                 ch1, ch2, ch3 = st.columns(3)
-                ch1.metric("Total de Receitas (Histórico)", f"R$ {rec_hist:,.2f}")
-                ch2.metric("Total de Despesas (Histórico)", f"R$ {des_hist:,.2f}")
+                ch1.metric("Total de Receitas", f"R$ {rec_hist:,.2f}")
+                ch2.metric("Total de Despesas", f"R$ {des_hist:,.2f}")
                 ch3.metric("Saldo Acumulado", f"R$ {saldo_hist:,.2f}", delta=f"R$ {saldo_hist:,.2f}", delta_color=cor_delta)
+
+                st.markdown("---")
+                
+                # 2. ACERTO DE CONTAS ENTRE PESSOAS (COMPLEMENTAÇÃO)
+                st.subheader("🤝 Acerto de Contas (Contribuintes)")
+                st.caption("Baseado nas rubricas *Complementação - [Nome] - Outras Despesas*")
+
+                # Padrão flexível para encontrar a rubrica ignorando espaços extras e maiúsculas/minúsculas
+                padrao_nome = r'Complementa[çc][ãa]o\s*-\s*([A-Za-zÀ-ÿ]+)\s*-\s*Outras Despesas'
+
+                def extrair_contribuinte(texto):
+                    if pd.isna(texto): return None
+                    match = re.search(padrao_nome, str(texto), re.IGNORECASE)
+                    if match: return match.group(1).strip().capitalize()
+                    return None
+
+                # Procura o nome na Descrição ou na Categoria
+                df_temp = df.copy()
+                df_temp['Contribuinte'] = df_temp['Descrição'].apply(extrair_contribuinte)
+                if 'Categoria' in df_temp.columns:
+                    df_temp.loc[df_temp['Contribuinte'].isnull(), 'Contribuinte'] = df_temp['Categoria'].apply(extrair_contribuinte)
+
+                df_comp = df_temp.dropna(subset=['Contribuinte'])
+
+                if df_comp.empty:
+                    st.info("Nenhum registo de 'Complementação' encontrado no histórico.")
+                else:
+                    saldos_pessoas = {}
+                    for pessoa in df_comp['Contribuinte'].unique():
+                        df_p = df_comp[df_comp['Contribuinte'] == pessoa]
+                        rec_p = df_p[df_p['Tipo'] == 'Receita']['Valor (R$)'].sum()
+                        desp_p = df_p[df_p['Tipo'] == 'Despesa']['Valor (R$)'].sum()
+
+                        # Saldo da pessoa = Tudo o que injetou (Receita) - Tudo o que retirou/gastou (Despesa)
+                        saldos_pessoas[pessoa] = rec_p - desp_p
+
+                    num_pessoas = len(saldos_pessoas)
+                    total_contribuido = sum(saldos_pessoas.values())
+                    media_ideal = total_contribuido / num_pessoas if num_pessoas > 0 else 0
+
+                    c_pessoas = st.columns(num_pessoas)
+                    i = 0
+                    for pessoa, saldo in saldos_pessoas.items():
+                        diferenca = saldo - media_ideal
+
+                        if diferenca > 0:
+                            texto_acerto = f"🟢 Tem a receber: **R$ {diferenca:,.2f}**"
+                        elif diferenca < 0:
+                            texto_acerto = f"🔴 Deve compensar: **R$ {abs(diferenca):,.2f}**"
+                        else:
+                            texto_acerto = "⚪ Tudo quite"
+
+                        with c_pessoas[i]:
+                            st.write(f"**{pessoa}**")
+                            st.write(f"Injeção Líquida: R$ {saldo:,.2f}")
+                            st.markdown(texto_acerto)
+                        i += 1
+
+                    st.caption(f"*(A média ideal de injeção financeira por pessoa foi de R$ {media_ideal:,.2f})*")
